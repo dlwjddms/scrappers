@@ -1,66 +1,54 @@
 package main
 
 import (
-	"errors"
 	"fmt"
+	"log"
 	"net/http"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
-// we will going to build URL checker
-/*
- * we will going to have URL slice
- * that we want to check
- * and check each URL
- * if URL is up we willl going to say OK or FAIL
- */
-type rquestResult struct {
-	url    string
-	status string
-}
+/*To navigate through HTML and to be able to find things in the HTML
+we will going to use goquery, Its like jquery for GO
+It allows us to navigate through HTML , inside of the HTML document
+: install -> go get github.com/PuerkitoBio/goquery */
+/*First we will get pages than we visit each page ,
+ *and than we extract job from page and put it in to excel*/
 
-var errRequestFailed = errors.New("Request Failed")
+var baseURL string = "https://cse.cau.ac.kr/sub05/sub0501.php"
+
+//"https://kr.indeed.com/jobs?q=로봇엔지니어&l=&ts=1598092708172&rq=1&rsIdx=0&fromage=last&newcount=26"
 
 func main() {
-	/*  not initialized.. just empty map
-	// -> but you have to do initialize before using
-	// var results = map[string]string{}
-	// -> or use make (makes a make for me)
-	*/
-	results := make(map[string]string)
-	c := make(chan rquestResult)
-	/* we want to do this job all at once */
-	urls := []string{
-		"https://www.airbnb.com/",
-		"https://google.com/",
-		"https://reddit.com/",
-		"https://www.facebook.com/",
-		"https://www.instagram.com/",
-	}
-
-	for _, url := range urls {
-		go hitURL(url, c)
-	}
-	for i := 0; i < len(urls); i++ {
-		result := <-c
-		results[result.url] = result.status
-	}
-
-	for url, status := range results {
-		fmt.Println(url, status)
-	}
+	pages := getPages()
+	fmt.Println(pages)
 }
 
-/*function that will hit the websites*/
-/*Receive from the channel,sometime you want to specify
-* This func have channel, but this channel you can not send, you can just receive
-* "c chan<- result" : send only  so "fmt.Println(<-c)"" won't work
- */
-func hitURL(url string, c chan<- rquestResult) {
-	/*we have to make a request for hit */
-	resp, err := http.Get(url)
-	status := "OK"
-	if err != nil || resp.StatusCode >= 400 {
-		status = "FAILED"
+/*fucking error.. I think I just did go mod init github.com/dlwjddms/scrappers .. and do it again ** */
+/* return how many page is it*/
+func getPages() int {
+	res, err := http.Get(baseURL)
+	checkErr(err)
+	checkCode(res)
+
+	defer res.Body.Close() // We need to close IO... after function is done prevent memory leak
+	// Load the HTML document
+	doc, err := goquery.NewDocumentFromReader(res.Body) //Body is basically Byte IO
+	checkErr(err)
+
+	//class name of the page : pagination-list
+	doc.Find("paging")
+	fmt.Println(doc)
+
+	return 0
+}
+func checkErr(err error) {
+	if err != nil {
+		log.Fatalln(err)
 	}
-	c <- rquestResult{url: url, status: status}
+}
+func checkCode(res *http.Response) {
+	if res.StatusCode != 200 {
+		log.Fatalln("Request Failed sith Status: ", res.StatusCode)
+	}
 }
