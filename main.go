@@ -27,40 +27,26 @@ var baseURL string = "https://cse.cau.ac.kr/sub05/sub0501.php" // offset =1 mean
 
 func main() {
 	var jobs []extractedJob
+	c := make(chan []extractedJob)
 	totalPages := getPages()
 	// hit the url
 	for i := 0; i < totalPages; i++ {
 		//[] + [] + [] = []
 		// how can you combine many array? -> use "..."
-		extractedJobs := getPage(i)
+		go getPage(i, c)
+
+	}
+	// wait for go routine
+	for i := 0; i < totalPages; i++ {
+		extractedJobs := <-c
 		jobs = append(jobs, extractedJobs...)
 	}
+
 	writeJobs(jobs)
 	fmt.Println("Done, extracted", len(jobs))
 }
 
-// write it at csv
-func writeJobs(jobs []extractedJob) {
-	// create file
-	file, err := os.Create("cau_notice.csv")
-	checkErr(err)
-	// 1. create writer 2, give data to writer 3. take data Flush to the file
-	w := csv.NewWriter(file)
-	defer w.Flush() // write the data to the file
-
-	headers := []string{"Title", "date", "detailURL", "views"}
-
-	wErr := w.Write(headers)
-	checkErr(wErr)
-
-	for _, job := range jobs {
-		jobSlice := []string{job.title, job.date, baseURL + job.detailURL, job.views}
-		jwErr := w.Write(jobSlice)
-		checkErr(jwErr)
-	}
-}
-
-func getPage(page int) []extractedJob {
+func getPage(page int, mainC chan<- []extractedJob) {
 	//empty slice of jobs
 	var jobs []extractedJob
 	c := make(chan extractedJob)
@@ -87,7 +73,7 @@ func getPage(page int) []extractedJob {
 		job := <-c
 		jobs = append(jobs, job)
 	}
-	return jobs
+	mainC <- jobs
 }
 
 func extractJob(row *goquery.Selection, c chan<- extractedJob) {
@@ -137,6 +123,28 @@ func getPages() int {
 
 	return pages
 }
+
+// write it at csv
+func writeJobs(jobs []extractedJob) {
+	// create file
+	file, err := os.Create("cau_notice.csv")
+	checkErr(err)
+	// 1. create writer 2, give data to writer 3. take data Flush to the file
+	w := csv.NewWriter(file)
+	defer w.Flush() // write the data to the file
+
+	headers := []string{"Title", "date", "detailURL", "views"}
+
+	wErr := w.Write(headers)
+	checkErr(wErr)
+
+	for _, job := range jobs {
+		jobSlice := []string{job.title, job.date, baseURL + job.detailURL, job.views}
+		jwErr := w.Write(jobSlice)
+		checkErr(jwErr)
+	}
+}
+
 func checkErr(err error) {
 	if err != nil {
 		log.Fatalln(err)
