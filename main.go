@@ -1,32 +1,89 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
-/*To navigate through HTML and to be able to find things in the HTML
-we will going to use goquery, Its like jquery for GO
-It allows us to navigate through HTML , inside of the HTML document
-: install -> go get github.com/PuerkitoBio/goquery */
-/*First we will get pages than we visit each page ,
- *and than we extract job from page and put it in to excel*/
+type extractedJob struct {
+	detailURL string
+	title     string
+	date      string
+	views     string
+}
 
-var baseURL string = "https://cse.cau.ac.kr/sub05/sub0501.php"
+var baseURL string = "https://cse.cau.ac.kr/sub05/sub0501.php" // offset =1 means first page
 
 //"https://kr.indeed.com/jobs?q=로봇엔지니어&l=&ts=1598092708172&rq=1&rsIdx=0&fromage=last&newcount=26"
 
 func main() {
-	pages := getPages()
-	fmt.Println(pages)
+	var jobs []extractedJob
+	totalPages := getPages()
+	// hit the url
+	for i := 0; i < totalPages; i++ {
+		//[] + [] + [] = []
+		// how can you combine many array? -> use "..."
+		extractedJobs := getPage(i)
+		jobs = append(jobs, extractedJobs...)
+	}
+}
+
+func getPage(page int) []extractedJob {
+	//empty slice of jobs
+	var jobs []extractedJob
+	pageURL := baseURL + "?offset=" + strconv.Itoa(page) // int to string
+	//fmt.Println("Requesting URL :", pageURL)
+	res, err := http.Get(pageURL)
+	checkErr(err)
+	checkCode(res)
+
+	defer res.Body.Close() // We need to close IO... after function is done prevent memory leak
+	// Load the HTML document
+	doc, err := goquery.NewDocumentFromReader(res.Body) //Body is basically Byte IO
+	checkErr(err)
+
+	//searchCards := doc.Find(".aleft")
+
+	searchCards := doc.Find(".table-basic  tr")
+
+	searchCards.Each(func(i int, row *goquery.Selection) { //s is each card~!
+		job := extractJob(row)
+		jobs = append(jobs, job)
+	})
+	return jobs
+}
+
+func extractJob(row *goquery.Selection) extractedJob {
+	s := row.Find(".aleft  a")
+	innerURL, _ := s.Attr("href")
+	title := cleanString(s.Text())
+	date := cleanString(row.Find(".pc-only").Eq(2).Text())
+	views := row.Find(".pc-only").Eq(3).Text()
+	return extractedJob{
+		detailURL: innerURL,
+		title:     title,
+		date:      date,
+		views:     views}
+}
+
+/*make string clear because there would be too many spaces
+-> pkg strings -> TrimSpace*/
+/*I want to clear the string and make evey word in to seperate things
+erase small and big space and only word in array*/
+func cleanString(str string) string {
+	//Fields split the string ... make an array only text
+	//join take array and put it together with seperator
+	return strings.Join(strings.Fields(strings.TrimSpace(str)), " ")
 }
 
 /*fucking error.. I think I just did go mod init github.com/dlwjddms/scrappers .. and do it again ** */
 /* return how many page is it*/
 func getPages() int {
+	pages := 0
 	res, err := http.Get(baseURL)
 	checkErr(err)
 	checkCode(res)
@@ -37,10 +94,15 @@ func getPages() int {
 	checkErr(err)
 
 	//class name of the page : pagination-list
-	doc.Find("paging")
-	fmt.Println(doc)
+	doc.Find(".paging").Each(func(i int, s *goquery.Selection) {
+		// we have next , big next and no 1
+		// keep next because we don't count for "1" (first page)
+		//fmt.Println(s.Find("a").Length()) // count the link
+		pages = s.Find("a").Length()
+	})
+	//fmt.Println(doc)
 
-	return 0
+	return pages
 }
 func checkErr(err error) {
 	if err != nil {
