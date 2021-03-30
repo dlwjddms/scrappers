@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/csv"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -29,6 +32,29 @@ func main() {
 		// how can you combine many array? -> use "..."
 		extractedJobs := getPage(i)
 		jobs = append(jobs, extractedJobs...)
+	}
+	writeJobs(jobs)
+	fmt.Println("Done, extracted", len(jobs))
+}
+
+// write it at csv
+func writeJobs(jobs []extractedJob) {
+	// create file
+	file, err := os.Create("cau_notice.csv")
+	checkErr(err)
+	// 1. create writer 2, give data to writer 3. take data Flush to the file
+	w := csv.NewWriter(file)
+	defer w.Flush() // write the data to the file
+
+	headers := []string{"Title", "date", "detailURL", "views"}
+
+	wErr := w.Write(headers)
+	checkErr(wErr)
+
+	for _, job := range jobs {
+		jobSlice := []string{job.title, job.date, baseURL + job.detailURL, job.views}
+		jwErr := w.Write(jobSlice)
+		checkErr(jwErr)
 	}
 }
 
