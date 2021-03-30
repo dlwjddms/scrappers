@@ -21,7 +21,9 @@ type extractedJob struct {
 
 var baseURL string = "https://cse.cau.ac.kr/sub05/sub0501.php" // offset =1 means first page
 
-//"https://kr.indeed.com/jobs?q=로봇엔지니어&l=&ts=1598092708172&rq=1&rsIdx=0&fromage=last&newcount=26"
+/*Two Channel
+ * main <-> getPage
+ * getPage <-> extract Job*/
 
 func main() {
 	var jobs []extractedJob
@@ -61,6 +63,7 @@ func writeJobs(jobs []extractedJob) {
 func getPage(page int) []extractedJob {
 	//empty slice of jobs
 	var jobs []extractedJob
+	c := make(chan extractedJob)
 	pageURL := baseURL + "?offset=" + strconv.Itoa(page) // int to string
 	//fmt.Println("Requesting URL :", pageURL)
 	res, err := http.Get(pageURL)
@@ -77,19 +80,23 @@ func getPage(page int) []extractedJob {
 	searchCards := doc.Find(".table-basic  tr")
 
 	searchCards.Each(func(i int, row *goquery.Selection) { //s is each card~!
-		job := extractJob(row)
-		jobs = append(jobs, job)
+		go extractJob(row, c)
+
 	})
+	for i := 0; i < searchCards.Length(); i++ {
+		job := <-c
+		jobs = append(jobs, job)
+	}
 	return jobs
 }
 
-func extractJob(row *goquery.Selection) extractedJob {
+func extractJob(row *goquery.Selection, c chan<- extractedJob) {
 	s := row.Find(".aleft  a")
 	innerURL, _ := s.Attr("href")
 	title := cleanString(s.Text())
 	date := cleanString(row.Find(".pc-only").Eq(2).Text())
 	views := row.Find(".pc-only").Eq(3).Text()
-	return extractedJob{
+	c <- extractedJob{
 		detailURL: innerURL,
 		title:     title,
 		date:      date,
